@@ -54,7 +54,7 @@ class Venue(db.Model):
     seeking_description = db.Column(db.String(500))
     website = db.Column(db.String(200))
     shows = db.relationship('Show',backref='venue',lazy=True)  #Foregin key ref relation with Master table
-    genres = db.Column(db.String(500))
+    genres = db.Column(db.ARRAY(db.String()))  
     # past_show = db.relationship('Shows',backref='venue',lazy=True)
 
     def __repr__(self):
@@ -68,7 +68,7 @@ class Artist(db.Model):
     city = db.Column(db.String(120))
     state = db.Column(db.String(120))
     phone = db.Column(db.String(120))
-    genres = db.Column(db.String(120))
+    genres = db.Column(db.ARRAY(db.String()))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
     shows = db.relationship('Show',backref='artist',lazy=True)  #Foregin key ref relation with Master table
@@ -231,7 +231,7 @@ def show_venue(venue_id):
   data1 =({
     "id": venue_id,
     "name": v_venue.name, 
-    "genres": (v_venue.genres).split(","),
+    "genres": v_venue.genres,
     "address":v_venue.address ,
     "city": v_venue.city,
     "state": v_venue.state,
@@ -412,7 +412,7 @@ def show_artist(artist_id):
   data1={
     "id": artist_id,
     "name": a_artist.name,
-    "genres": (a_artist.genres).split(","), ## convert to list
+    "genres": a_artist.genres, ## convert to comma seprated values
     "city": a_artist.city,
     "state": a_artist.state,
     "phone": a_artist.phone,
@@ -434,7 +434,8 @@ def show_artist(artist_id):
 def edit_artist(artist_id):
   #get Artist by primary key
   data_artist = Artist.query.get(artist_id)
-  
+ 
+  data_artist.website_link=data_artist.website #mismatch between form and database columns. 
   # assign form fields pass object
   form = ArtistForm(obj=data_artist)
   artist={
@@ -444,12 +445,13 @@ def edit_artist(artist_id):
     "city": data_artist.city,
     "state": data_artist.state,
     "phone": data_artist.phone,
-    "website":data_artist.website,
+    "website_link":data_artist.website,
     "facebook_link": data_artist.facebook_link,
     "seeking_venue": data_artist.seeking_venue,
     "seeking_description": data_artist.seeking_description,
     "image_link": data_artist.image_link,
   }
+  
   # TODO: populate form with fields from artist with ID <artist_id>
   return render_template('forms/edit_artist.html', form=form, artist=artist)
 
@@ -459,7 +461,7 @@ def edit_artist_submission(artist_id):
   # artist record with ID <artist_id> using the new attributes
   error = False
   form = ArtistForm()
-  a_artist = Artist.request.get(artist_id)
+  a_artist = Artist.query.get(artist_id)
   try:
     # start to edit the data after take them from the form
       a_artist.name=form.name.data
@@ -490,6 +492,7 @@ def edit_artist_submission(artist_id):
 @app.route('/venues/<int:venue_id>/edit', methods=['GET'])
 def edit_venue(venue_id):
   data_venue = Venue.query.get(venue_id)
+  data_venue.website_link=data_venue.website # tosync formname and db returned columns names
     
     # assign form fields pass object
   form = VenueForm(obj=data_venue)
@@ -501,14 +504,14 @@ def edit_venue(venue_id):
     "city":  data_venue.city,
     "state": data_venue.state,
     "phone":  data_venue.phone,
-    "website":  data_venue.website,
+    "website_link":  data_venue.website,
     "facebook_link":  data_venue.facebook_link,
     "seeking_talent":  data_venue.seeking_talent,
     "seeking_description":  data_venue.seeking_description,
     "image_link": data_venue.image_link,
     }
 
-  # TODO: populate form with values from venue with ID <venue_id>
+   # TODO: populate form with values from venue with ID <venue_id>
   return render_template('forms/edit_venue.html', form=form, venue=venue)
 
 @app.route('/venues/<int:venue_id>/edit', methods=['POST'])
@@ -516,8 +519,9 @@ def edit_venue_submission(venue_id):
   # TODO: take values from the form submitted, and update existing
   # venue record with ID <venue_id> using the new attributes
   error = False
+  errordesc =''
   form = VenueForm()
-  a_venue = Venue.request.get(venue_id)
+  a_venue = Venue.query.get(venue_id)
   try:
       # start to edit the data after take them from the form
         a_venue.name=form.name.data
@@ -527,19 +531,20 @@ def edit_venue_submission(venue_id):
         a_venue.phone=form.phone.data
         a_venue.image_link=form.image_link.data
         a_venue.facebook_link=form.facebook_link.data
-        a_venue.seeking_venue=form.seeking_venue.data
+        a_venue.seeking_talent=form.seeking_talent.data
         a_venue.seeking_description=form.seeking_description.data
         a_venue.website=form.website_link.data
         
         db.session.commit()
-  except:
+  except Exception as err:
       error = True
+      errordesc = f"{err.__class__.__name__}: {err}"
       db.session.rollback()
   finally:
           db.session.close()
   if error: 
       # in case of error
-      flash('Some error encountered. Venue could not be updated')
+      flash('Some error encountered. Venue could not be updated' + errordesc)
   else: 
       # if success
       flash('Successfully updated Venue' + form.name.data)
@@ -570,8 +575,7 @@ def create_artist_submission():
         #id : Primary key
         name = name,
         city = form.city.data,
-        state = form.state.data,
-        address = form.address.data,
+        state = form.state.data,        
         phone = form.phone.data,
         image_link = form.image_link.data,
         facebook_link = form.facebook_link.data,
@@ -589,7 +593,7 @@ def create_artist_submission():
     db.session.close()
   
   if error :
-    flash('An error occurred. Venue ' + name + ' could not be listed.')
+    flash('An error occurred. Artist ' + name + ' could not be listed.')
   else:
      flash('Venue ' + request.form['name'] + ' was successfully listed!')
   # on successful db insert, flash success
